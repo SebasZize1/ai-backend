@@ -15,7 +15,7 @@ const client = new OpenAI({
 
 const PORT = process.env.PORT || 3000;
 const BOOKING_LINK =
-  process.env.BOOKING_LINK || "https://calendly.com/your-real-link/demo";
+  process.env.BOOKING_LINK || "https://calendly.com/empfangai/termin-buchen";
 
 /**
  * -----------------------------
