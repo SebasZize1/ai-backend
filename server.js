@@ -401,34 +401,35 @@ app.post("/chat", async (req, res) => {
     const instructions = `
 Du bist der Website-Assistent von EmpfangAI.
 
-Zweck:
-- Erkläre kurz, was EmpfangAI für Unternehmen macht.
-- EmpfangAI hilft lokalen Unternehmen, Kundenanfragen zu beantworten, Leads zu erfassen und Terminbuchungen zu unterstützen.
-- Führe interessierte Besucher zu Demo oder Rückruf.
-
-Wichtige Regeln:
+Regeln:
 - Antworte immer auf Deutsch.
-- Antworte kurz. Meist 1 bis 3 Sätze.
-- Nur bei echter Nachfrage etwas ausführlicher.
-- Bleibe bei EmpfangAI und geschäftlichen Fragen.
-- Bei irrelevanten Fragen höflich zurücklenken.
-- Keine erfundenen Preise, Garantien oder Features.
-- Wenn jemand Interesse zeigt, frage bei Bedarf nach Name, Unternehmen und Kontakt.
-- Wenn jemand eine Demo möchte, verweise auf die Buchung.
-- Wenn jemand kontaktiert werden möchte, bitte um Telefonnummer oder E-Mail.
+- Antworte kurz: maximal 1 bis 2 Sätze.
+- Nur auf klare Nachfrage etwas ausführlicher.
+- Bleibe beim Thema EmpfangAI, Unternehmen, Demo, Kosten, Einsatzmöglichkeiten, Lead-Erfassung und Terminbuchung.
+- Keine langen Erklärungen.
+- Keine irrelevanten Gespräche.
+- Keine erfundenen Preise, Garantien oder Funktionen.
 
-Stil:
-- professionell
-- freundlich
-- knapp
-- klar
+Ziel:
+- kurz erklären, was EmpfangAI macht
+- Demo-Buchung unterstützen
+- Rückruf/Kontakt erfassen
 `;
 
-    const response = await client.responses.create({
-      model: "gpt-5.4",
-      instructions,
-      input: message,
-    });
+    console.log("About to call OpenAI...");
+
+    const response = await Promise.race([
+      client.responses.create({
+        model: "gpt-4o-mini",
+        instructions,
+        input: message,
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("OpenAI timeout after 20s")), 20000)
+      ),
+    ]);
+
+    console.log("OpenAI responded successfully");
 
     let reply =
       response.output_text ||
@@ -450,10 +451,10 @@ Stil:
         source,
       });
 
-      reply = "Gerne. Senden Sie mir bitte Ihre Telefonnummer oder E-Mail-Adresse für den Rückruf.";
-
       if (finalPhone || finalEmail) {
-        reply = "Danke. Ihre Rückruf-Anfrage wurde erfasst. Wir melden uns bei Ihnen.";
+        reply = "Danke! Wir melden uns in Kürze bei Ihnen.";
+      } else {
+        reply = "Gerne. Senden Sie mir bitte Ihre Telefonnummer oder E-Mail-Adresse.";
       }
     } else if (shouldSaveAsLead) {
       savedLead = await saveLead({
@@ -469,22 +470,22 @@ Stil:
         booking_link_sent: wantsBooking ? "Yes" : "No",
       });
 
-      if (hasContactInfo && !isLead && !wantsBooking) {
-        reply = "Danke. Ihre Kontaktdaten wurden erfasst. Wir melden uns bei Ihnen.";
-      } else if (!wantsBooking && !finalPhone && !finalEmail) {
-        reply += " Senden Sie mir gern Ihre E-Mail-Adresse oder Telefonnummer, damit wir Sie kontaktieren können.";
+      if (wantsBooking) {
+        bookingData = sendBookingLink();
+        reply = `Gerne — hier können Sie direkt eine Demo buchen:<br><br><a href="${BOOKING_LINK}" target="_blank" rel="noopener noreferrer">Demo-Termin buchen</a>`;
+      } else if (hasContactInfo && !isLead) {
+        reply = "Danke! Wir melden uns in Kürze bei Ihnen.";
+      } else if (!finalPhone && !finalEmail) {
+        reply = "Gerne. Senden Sie mir bitte Ihre E-Mail-Adresse oder Telefonnummer.";
+      } else {
+        reply = "Danke! Wir melden uns in Kürze bei Ihnen.";
       }
-    }
-
-    if (wantsBooking) {
+    } else if (wantsBooking) {
       bookingData = sendBookingLink();
-      reply = `Gerne — hier können Sie direkt eine Demo buchen: ${BOOKING_LINK}`;
-
-      if (!finalPhone && !finalEmail) {
-        reply +=
-          " Wenn Sie lieber kontaktiert werden möchten, senden Sie mir bitte Ihren Namen, Ihr Unternehmen und Ihre E-Mail-Adresse oder Telefonnummer.";
-      }
+      reply = `Gerne — hier können Sie direkt eine Demo buchen:<br><br><a href="${BOOKING_LINK}" target="_blank" rel="noopener noreferrer">Demo-Termin buchen</a>`;
     }
+
+    console.log("Sending final response to frontend");
 
     return res.json({
       reply,
@@ -496,7 +497,9 @@ Stil:
       savedCallback: callbackResult ? callbackResult.success : false,
     });
   } catch (error) {
-    console.error("Server error:", error);
+    console.error("Server error full:", error);
+    console.error("Server error message:", error.message);
+    console.error("Server error stack:", error.stack);
 
     return res.status(500).json({
       error: "Auf dem Server ist ein Fehler aufgetreten.",
