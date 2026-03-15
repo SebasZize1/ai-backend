@@ -15,11 +15,11 @@ const client = new OpenAI({
 
 const PORT = process.env.PORT || 3000;
 const BOOKING_LINK =
-  process.env.BOOKING_LINK || "https://calendly.com/dein-link/demo";
+  process.env.BOOKING_LINK || "https://calendly.com/your-real-link/demo";
 
 /**
  * -----------------------------
- * 1) HILFSFUNKTIONEN
+ * HELPERS
  * -----------------------------
  */
 
@@ -31,12 +31,28 @@ function containsAny(text, keywords) {
   return keywords.some((word) => text.includes(word));
 }
 
+function extractContactInfo(rawText = "") {
+  const text = String(rawText);
+
+  const emailMatch = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  const phoneMatch = text.match(/(\+?\d[\d\s()/.-]{6,}\d)/);
+  const fullNameMatch = text.match(
+    /\b([A-ZÄÖÜ][a-zäöüß]+)\s+([A-ZÄÖÜ][a-zäöüß]+)\b/
+  );
+
+  return {
+    extractedEmail: emailMatch ? emailMatch[0] : "",
+    extractedPhone: phoneMatch ? phoneMatch[0] : "",
+    extractedName: fullNameMatch
+      ? `${fullNameMatch[1]} ${fullNameMatch[2]}`
+      : "",
+  };
+}
+
 /**
  * -----------------------------
- * 2) RELEVANZ-ERKENNUNG
+ * RELEVANCE / INTENTS
  * -----------------------------
- * Entscheidet:
- * Ist die Nachricht überhaupt relevant für EmpfangAI?
  */
 
 function isRelevantToEmpfangAI(message) {
@@ -64,12 +80,12 @@ function isRelevantToEmpfangAI(message) {
     "unternehmen",
     "firma",
     "praxis",
-    "kanzlei",
-    "makler",
-    "werkstatt",
     "zahnarzt",
+    "zahnarztpraxis",
     "hausarzt",
-    "kundensupport",
+    "kanzlei",
+    "werkstatt",
+    "makler",
     "anfragen",
     "kontakt",
     "rückruf",
@@ -77,60 +93,56 @@ function isRelevantToEmpfangAI(message) {
     "preis",
     "preise",
     "kosten",
+    "kostet",
     "service",
     "funktioniert",
-    "wie geht",
-    "wie läuft",
-    "einrichtung"
+    "einrichtung",
+    "einsatzmöglichkeiten",
   ];
 
   return containsAny(text, relevantKeywords);
 }
-
-/**
- * -----------------------------
- * 3) INTENT-DETEKTOREN
- * -----------------------------
- */
 
 function detectLeadIntent(message) {
   const text = normalizeText(message);
 
   const leadKeywords = [
     "demo",
+    "demo buchen",
+    "ich möchte eine demo",
     "termin",
     "termin buchen",
+    "terminbuchung",
     "buchen",
     "buchung",
     "meeting",
     "beratung",
     "interessiert",
-    "ich habe interesse",
+    "ich interessiere mich",
+    "interesse",
     "kontakt",
     "in kontakt",
     "kontaktieren",
-    "get in contact",
-    "get in touch",
-    "speak to someone",
-    "mit jemandem sprechen",
+    "bitte kontaktieren",
     "rückruf",
     "callback",
-    "call back",
-    "call me",
-    "contact me",
+    "kosten",
+    "kostet",
     "preis",
     "preise",
-    "kosten",
     "angebot",
-    "law firm",
-    "dentist",
-    "clinic",
-    "business",
     "für meine firma",
     "für mein unternehmen",
     "für meine praxis",
+    "für meine zahnarztpraxis",
     "für meine kanzlei",
-    "für meine werkstatt"
+    "für meine werkstatt",
+    "zahnarzt",
+    "zahnarztpraxis",
+    "hausarzt",
+    "kanzlei",
+    "werkstatt",
+    "makler",
   ];
 
   return containsAny(text, leadKeywords);
@@ -145,15 +157,14 @@ function detectCallbackIntent(message) {
     "bitte anrufen",
     "rückruf",
     "callback",
-    "call me",
-    "call back",
-    "contact me",
+    "bitte kontaktieren",
     "kontaktieren sie mich",
     "ich möchte kontaktiert werden",
-    "ich möchte sprechen",
+    "ich möchte mit jemandem sprechen",
+    "in kontakt treten",
     "in kontakt",
-    "get in touch",
-    "get in contact"
+    "contact me",
+    "call me",
   ];
 
   return containsAny(text, callbackKeywords);
@@ -165,38 +176,24 @@ function detectBookingIntent(message) {
   const bookingKeywords = [
     "demo",
     "demo buchen",
+    "ich möchte eine demo",
     "termin",
     "termin buchen",
+    "terminbuchung",
     "meeting",
     "beratung",
-    "buchung",
-    "buchen",
     "appointment",
-    "schedule"
+    "schedule",
+    "buchen",
+    "buchung",
   ];
 
   return containsAny(text, bookingKeywords);
 }
 
-function extractContactInfo(rawText = "") {
-  const text = String(rawText);
-
-  const emailMatch = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  const phoneMatch = text.match(/(\+?\d[\d\s()/.-]{6,}\d)/);
-  const nameMatch = text.match(
-    /\b([A-ZÄÖÜ][a-zäöüß]+)\s+([A-ZÄÖÜ][a-zäöüß]+)\b/
-  );
-
-  return {
-    extractedEmail: emailMatch ? emailMatch[0] : "",
-    extractedPhone: phoneMatch ? phoneMatch[0] : "",
-    extractedName: nameMatch ? `${nameMatch[1]} ${nameMatch[2]}` : "",
-  };
-}
-
 /**
  * -----------------------------
- * 4) MAKE-WEBHOOK
+ * MAKE WEBHOOK
  * -----------------------------
  */
 
@@ -242,7 +239,7 @@ async function sendLeadToMake(data) {
 
 /**
  * -----------------------------
- * 5) TOOL-AKTIONEN
+ * TOOL ACTIONS
  * -----------------------------
  */
 
@@ -256,6 +253,7 @@ async function saveLead({
   interested_service = "EmpfangAI Demo",
   notes = "",
   source = "Website",
+  booking_link_sent = "No",
 }) {
   const leadData = {
     date: new Date().toISOString().split("T")[0],
@@ -267,7 +265,7 @@ async function saveLead({
     message,
     interested_service,
     callback_requested: "No",
-    booking_link_sent: "No",
+    booking_link_sent,
     notes,
     source,
   };
@@ -326,7 +324,7 @@ async function requestCallback({
 
 /**
  * -----------------------------
- * 6) ROUTES
+ * ROUTES
  * -----------------------------
  */
 
@@ -360,27 +358,37 @@ app.post("/chat", async (req, res) => {
       });
     }
 
-    const relevant = isRelevantToEmpfangAI(message);
+    const extracted = extractContactInfo(message);
+    const hasContactInfo =
+      !!extracted.extractedEmail || !!extracted.extractedPhone;
+
     const isLead = detectLeadIntent(message);
     const wantsCallback = detectCallbackIntent(message);
     const wantsBooking = detectBookingIntent(message);
+    const keywordRelevant = isRelevantToEmpfangAI(message);
 
-    const extracted = extractContactInfo(message);
+    const relevant =
+      keywordRelevant || hasContactInfo || isLead || wantsCallback || wantsBooking;
+
+    const shouldSaveAsLead = isLead || hasContactInfo;
 
     const finalName =
       name && name !== "Website Visitor" ? name : extracted.extractedName || "";
     const finalEmail = email || extracted.extractedEmail || "";
     const finalPhone = phone || extracted.extractedPhone || "";
 
+    console.log("Keyword relevant:", keywordRelevant);
+    console.log("Has contact info:", hasContactInfo);
     console.log("Relevant:", relevant);
     console.log("Lead detected:", isLead);
+    console.log("Should save as lead:", shouldSaveAsLead);
     console.log("Callback detected:", wantsCallback);
     console.log("Booking detected:", wantsBooking);
 
     if (!relevant) {
       return res.json({
         reply:
-          "Ich bin hier, um Fragen zu EmpfangAI zu beantworten. Ich helfe Unternehmen zu verstehen, wie unser KI-Assistent Kundenanfragen beantwortet, Leads erfasst und bei Terminbuchungen unterstützt. Sie können mich zum Beispiel nach einer Demo, dem Ablauf, Einsatzmöglichkeiten oder den Kosten fragen.",
+          "Ich beantworte Fragen zu EmpfangAI. Fragen Sie mich z. B. nach Demo, Kosten, Ablauf oder Einsatzmöglichkeiten.",
         leadDetected: false,
         callbackRequested: false,
         bookingRequested: false,
@@ -393,37 +401,27 @@ app.post("/chat", async (req, res) => {
     const instructions = `
 Du bist der Website-Assistent von EmpfangAI.
 
-Dein Zweck:
-- Erkläre Unternehmern klar und kurz, was EmpfangAI macht.
-- EmpfangAI hilft lokalen Unternehmen dabei, Kundenfragen automatisch zu beantworten, Anfragen zu erfassen und bei Terminbuchungen zu unterstützen.
-- Führe interessierte Besucher zu einer Demo oder zu einer Rückruf-Anfrage.
+Zweck:
+- Erkläre kurz, was EmpfangAI für Unternehmen macht.
+- EmpfangAI hilft lokalen Unternehmen, Kundenanfragen zu beantworten, Leads zu erfassen und Terminbuchungen zu unterstützen.
+- Führe interessierte Besucher zu Demo oder Rückruf.
 
-Wichtige Verhaltensregeln:
+Wichtige Regeln:
 - Antworte immer auf Deutsch.
-- Bleibe fokussiert auf EmpfangAI und den Nutzen für Unternehmen.
-- Wenn eine Frage unklar, albern oder nicht relevant ist, leite höflich zurück zum eigentlichen Zweck.
-- Führe keine belanglosen oder spielerischen Unterhaltungen.
-- Erfinde keine Preise, Garantien oder Funktionen.
-- Wenn jemand Interesse zeigt, fordere wenn nötig Name, E-Mail, Telefonnummer und Unternehmen an.
-- Wenn jemand eine Demo möchte, erwähne die Möglichkeit zur Terminbuchung.
-- Wenn jemand kontaktiert werden möchte, fordere die Kontaktdaten an.
-
-Typische Themen:
-- Demo
-- Preise / Kosten
-- Einrichtung
-- Einsatzmöglichkeiten
-- Branchen
-- Lead-Erfassung
-- Terminbuchung
-- Rückruf
+- Antworte kurz. Meist 1 bis 3 Sätze.
+- Nur bei echter Nachfrage etwas ausführlicher.
+- Bleibe bei EmpfangAI und geschäftlichen Fragen.
+- Bei irrelevanten Fragen höflich zurücklenken.
+- Keine erfundenen Preise, Garantien oder Features.
+- Wenn jemand Interesse zeigt, frage bei Bedarf nach Name, Unternehmen und Kontakt.
+- Wenn jemand eine Demo möchte, verweise auf die Buchung.
+- Wenn jemand kontaktiert werden möchte, bitte um Telefonnummer oder E-Mail.
 
 Stil:
 - professionell
 - freundlich
-- kurz
+- knapp
 - klar
-- verkaufsorientiert, aber nicht aufdringlich
 `;
 
     const response = await client.responses.create({
@@ -434,7 +432,7 @@ Stil:
 
     let reply =
       response.output_text ||
-      "Danke für Ihre Nachricht. Ich helfe Ihnen gerne bei Fragen zu EmpfangAI.";
+      "Gerne. Ich helfe Ihnen bei Fragen zu EmpfangAI.";
 
     let savedLead = null;
     let callbackResult = null;
@@ -452,11 +450,12 @@ Stil:
         source,
       });
 
-      if (!finalPhone && !finalEmail) {
-        reply +=
-          " Damit wir Sie erreichen können, senden Sie bitte noch Ihre Telefonnummer oder E-Mail-Adresse.";
+      reply = "Gerne. Senden Sie mir bitte Ihre Telefonnummer oder E-Mail-Adresse für den Rückruf.";
+
+      if (finalPhone || finalEmail) {
+        reply = "Danke. Ihre Rückruf-Anfrage wurde erfasst. Wir melden uns bei Ihnen.";
       }
-    } else if (isLead) {
+    } else if (shouldSaveAsLead) {
       savedLead = await saveLead({
         name: finalName,
         phone: finalPhone,
@@ -467,22 +466,29 @@ Stil:
         interested_service: interested_service || "EmpfangAI Demo",
         notes,
         source,
+        booking_link_sent: wantsBooking ? "Yes" : "No",
       });
 
-      if (!finalPhone && !finalEmail) {
-        reply +=
-          " Wenn Sie möchten, können Sie mir auch direkt Ihre E-Mail-Adresse oder Telefonnummer senden, damit wir Sie kontaktieren können.";
+      if (hasContactInfo && !isLead && !wantsBooking) {
+        reply = "Danke. Ihre Kontaktdaten wurden erfasst. Wir melden uns bei Ihnen.";
+      } else if (!wantsBooking && !finalPhone && !finalEmail) {
+        reply += " Senden Sie mir gern Ihre E-Mail-Adresse oder Telefonnummer, damit wir Sie kontaktieren können.";
       }
     }
 
     if (wantsBooking) {
       bookingData = sendBookingLink();
-      reply += ` Hier können Sie direkt eine Demo buchen: ${BOOKING_LINK}`;
+      reply = `Gerne — hier können Sie direkt eine Demo buchen: ${BOOKING_LINK}`;
+
+      if (!finalPhone && !finalEmail) {
+        reply +=
+          " Wenn Sie lieber kontaktiert werden möchten, senden Sie mir bitte Ihren Namen, Ihr Unternehmen und Ihre E-Mail-Adresse oder Telefonnummer.";
+      }
     }
 
     return res.json({
       reply,
-      leadDetected: isLead,
+      leadDetected: shouldSaveAsLead,
       callbackRequested: wantsCallback,
       bookingRequested: wantsBooking,
       bookingLink: bookingData ? bookingData.bookingLink : null,
