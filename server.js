@@ -244,6 +244,7 @@ async function sendLeadToMake(data) {
  */
 
 async function saveLead({
+  conversation_id = "",
   name = "",
   phone = "",
   email = "",
@@ -289,6 +290,7 @@ function sendBookingLink() {
 }
 
 async function requestCallback({
+  conversation_id = "",
   name = "",
   phone = "",
   email = "",
@@ -338,17 +340,18 @@ app.get("/", (req, res) => {
 
 app.post("/chat", async (req, res) => {
   try {
-    const {
-      message,
-      name = "",
-      email = "",
-      phone = "",
-      business = "",
-      industry = "",
-      interested_service = "",
-      notes = "",
-      source = "Website",
-    } = req.body;
+  const {
+  conversationId = "",
+  message,
+  name = "",
+  email = "",
+  phone = "",
+  business = "",
+  industry = "",
+  interested_service = "",
+  notes = "",
+  source = "Website",
+} = req.body;
 
     console.log("Incoming req.body:", req.body);
 
@@ -357,7 +360,7 @@ app.post("/chat", async (req, res) => {
         error: "Nachricht ist erforderlich.",
       });
     }
-
+    const finalConversationId = conversationId || "conv_" + Date.now().toString();
     const extracted = extractContactInfo(message);
     const hasContactInfo =
       !!extracted.extractedEmail || !!extracted.extractedPhone;
@@ -441,6 +444,7 @@ Ziel:
 
     if (wantsCallback) {
       callbackResult = await requestCallback({
+        conversation_id: finalConversationId,
         name: finalName,
         phone: finalPhone,
         email: finalEmail,
@@ -458,6 +462,7 @@ Ziel:
       }
     } else if (shouldSaveAsLead) {
       savedLead = await saveLead({
+        conversation_id: finalConversationId,
         name: finalName,
         phone: finalPhone,
         email: finalEmail,
@@ -488,6 +493,7 @@ Ziel:
     console.log("Sending final response to frontend");
 
     return res.json({
+      conversationId: finalConversationId,
       reply,
       leadDetected: shouldSaveAsLead,
       callbackRequested: wantsCallback,
