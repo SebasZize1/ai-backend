@@ -375,7 +375,7 @@ app.post("/chat", async (req, res) => {
     const relevant =
       keywordRelevant || hasContactInfo || isLead || wantsCallback || wantsBooking;
 
-    const shouldSaveAsLead = isLead || hasContactInfo;
+    const shouldSaveAsLead = relevant;
 
     const finalName =
       name && name !== "Website Visitor" ? name : extracted.extractedName || "";
