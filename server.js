@@ -257,6 +257,7 @@ async function saveLead({
   booking_link_sent = "No",
 }) {
   const leadData = {
+    conversation_id,
     date: new Date().toISOString().split("T")[0],
     name,
     phone,
@@ -301,6 +302,7 @@ async function requestCallback({
   source = "Website",
 }) {
   const callbackData = {
+    conversation_id,
     date: new Date().toISOString().split("T")[0],
     name,
     phone,
