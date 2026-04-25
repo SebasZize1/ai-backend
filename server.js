@@ -23,6 +23,19 @@ const BOOKING_LINK =
  * -----------------------------
  */
 
+function getTimestamp() {
+  const now = new Date();
+
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(now);
+}
+
 function normalizeText(text) {
   return (text || "").toLowerCase().trim();
 }
@@ -258,7 +271,7 @@ async function saveLead({
 }) {
   const leadData = {
     conversation_id,
-    date: new Date().toISOString().split("T")[0],
+    timestamp: getTimestamp(),
     name,
     phone,
     email,
@@ -303,7 +316,7 @@ async function requestCallback({
 }) {
   const callbackData = {
     conversation_id,
-    date: new Date().toISOString().split("T")[0],
+    timestamp: getTimestamp(),
     name,
     phone,
     email,
@@ -375,7 +388,7 @@ app.post("/chat", async (req, res) => {
     const relevant =
       keywordRelevant || hasContactInfo || isLead || wantsCallback || wantsBooking;
 
-    const shouldSaveAsLead = relevant;
+    const shouldLogMessage = relevant;
 
     const finalName =
       name && name !== "Website Visitor" ? name : extracted.extractedName || "";
@@ -386,7 +399,7 @@ app.post("/chat", async (req, res) => {
     console.log("Has contact info:", hasContactInfo);
     console.log("Relevant:", relevant);
     console.log("Lead detected:", isLead);
-    console.log("Should save as lead:", shouldSaveAsLead);
+    console.log("Should save as lead:", shouldLogMessage);
     console.log("Callback detected:", wantsCallback);
     console.log("Booking detected:", wantsBooking);
 
@@ -462,7 +475,7 @@ Ziel:
       } else {
         reply = "Gerne. Senden Sie mir bitte Ihre Telefonnummer oder E-Mail-Adresse.";
       }
-    } else if (shouldSaveAsLead) {
+    } else if (shouldLogMessage) {
       savedLead = await saveLead({
         conversation_id: finalConversationId,
         name: finalName,
@@ -497,7 +510,7 @@ Ziel:
     return res.json({
       conversationId: finalConversationId,
       reply,
-      leadDetected: shouldSaveAsLead,
+      leadDetected: shouldLogMessage,
       callbackRequested: wantsCallback,
       bookingRequested: wantsBooking,
       bookingLink: bookingData ? bookingData.bookingLink : null,
