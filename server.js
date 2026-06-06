@@ -17,6 +17,53 @@ const PORT = process.env.PORT || 3000;
 const BOOKING_LINK =
   process.env.BOOKING_LINK || "https://calendly.com/empfangai/termin-buchen";
 
+// LANGUAGE MEMORY PER CONVERSATION
+const conversationLanguages = new Map();
+
+const languagePreferencePatterns = [
+  {
+    code: "de",
+    name: "Deutsch",
+    regex: /\b(deutsch|auf deutsch|in deutsch|german|allemand)\b/i,
+  },
+  {
+    code: "en",
+    name: "English",
+    regex: /\b(english|englisch|auf englisch|in english|anglais)\b/i,
+  },
+  {
+    code: "fr",
+    name: "Français",
+    regex: /\b(französisch|franzoesisch|français|francais|french|auf französisch|auf franzoesisch|en français|en francais)\b/i,
+  },
+  {
+    code: "nl",
+    name: "Nederlands",
+    regex: /\b(niederländisch|niederlaendisch|holländisch|hollaendisch|dutch|nederlands|vlaams|flämisch|flaemisch)\b/i,
+  },
+  {
+    code: "tr",
+    name: "Türkçe",
+    regex: /\b(türkisch|tuerkisch|turkish|türkçe|turkce|auf türkisch|auf tuerkisch)\b/i,
+  },
+];
+
+function detectLanguagePreference(message = "") {
+  const languageActionRegex =
+    /\b(sprich|sprechen|antworte|antworten|schreib|schreibe|speak|talk|answer|reply|respond|write|parle|parler|réponds|reponds|répondre|repondre|spreek|antwoord|schrijf|konuş|konus|cevap)\b/i;
+
+  const hasLanguageAction = languageActionRegex.test(message);
+
+  const matchedLanguage = languagePreferencePatterns.find((lang) =>
+    lang.regex.test(message)
+  );
+
+  if (hasLanguageAction && matchedLanguage) {
+    return matchedLanguage;
+  }
+
+  return null;
+}
 /**
  * -----------------------------
  * HELPERS
@@ -111,6 +158,60 @@ function isRelevantToEmpfangAI(message) {
     "funktioniert",
     "einrichtung",
     "einsatzmöglichkeiten",
+    
+        // English
+    "appointment",
+    "booking",
+    "schedule",
+    "pricing",
+    "cost",
+    "dentist",
+    "doctor",
+    "law firm",
+    "real estate",
+
+    // French
+    "rendez-vous",
+    "rdv",
+    "démo",
+    "demo",
+    "appel",
+    "rappel",
+    "prix",
+    "coût",
+    "cout",
+    "tarif",
+    "dentiste",
+    "médecin",
+    "medecin",
+    "cabinet médical",
+    "cabinet medical",
+    "avocat",
+    "agence immobilière",
+    "agence immobiliere",
+
+    // Dutch
+    "afspraak",
+    "terugbellen",
+    "prijs",
+    "kosten",
+    "tandarts",
+    "huisarts",
+    "advocaat",
+    "makelaar",
+
+    // Turkish
+    "randevu",
+    "geri arama",
+    "fiyat",
+    "ücret",
+    "ucret",
+    "dişçi",
+    "disci",
+    "doktor",
+    "avukat",
+    "emlak",
+    "tamirci",
   ];
 
   return containsAny(text, relevantKeywords);
@@ -156,6 +257,59 @@ function detectLeadIntent(message) {
     "kanzlei",
     "werkstatt",
     "makler",
+        // English
+    "appointment",
+    "booking",
+    "schedule",
+    "pricing",
+    "cost",
+    "dentist",
+    "doctor",
+    "law firm",
+    "real estate",
+
+    // French
+    "rendez-vous",
+    "rdv",
+    "démo",
+    "demo",
+    "appel",
+    "rappel",
+    "prix",
+    "coût",
+    "cout",
+    "tarif",
+    "dentiste",
+    "médecin",
+    "medecin",
+    "cabinet médical",
+    "cabinet medical",
+    "avocat",
+    "agence immobilière",
+    "agence immobiliere",
+
+    // Dutch
+    "afspraak",
+    "terugbellen",
+    "prijs",
+    "kosten",
+    "tandarts",
+    "huisarts",
+    "advocaat",
+    "makelaar",
+
+    // Turkish
+    "randevu",
+    "geri arama",
+    "fiyat",
+    "ücret",
+    "ucret",
+    "dişçi",
+    "disci",
+    "doktor",
+    "avukat",
+    "emlak",
+    "tamirci",
   ];
 
   return containsAny(text, leadKeywords);
@@ -178,6 +332,29 @@ function detectCallbackIntent(message) {
     "in kontakt",
     "contact me",
     "call me",
+        // French
+    "appelez-moi",
+    "appelez moi",
+    "rappel",
+    "contactez-moi",
+    "contactez moi",
+    "je veux être contacté",
+    "je veux etre contacte",
+
+    // Dutch
+    "bel mij",
+    "bel me",
+    "terugbellen",
+    "neem contact met mij op",
+    "ik wil gecontacteerd worden",
+
+    // Turkish
+    "beni ara",
+    "beni arayın",
+    "beni arayin",
+    "geri arama",
+    "benimle iletişime geçin",
+    "benimle iletisime gecin",
   ];
 
   return containsAny(text, callbackKeywords);
@@ -199,6 +376,24 @@ function detectBookingIntent(message) {
     "schedule",
     "buchen",
     "buchung",
+        // French
+    "rendez-vous",
+    "rdv",
+    "prendre rendez-vous",
+    "réserver",
+    "reserver",
+    "démo",
+    "demo",
+
+    // Dutch
+    "afspraak",
+    "afspraak maken",
+    "demo boeken",
+
+    // Turkish
+    "randevu",
+    "demo almak",
+    "demo istiyorum",
   ];
 
   return containsAny(text, bookingKeywords);
@@ -376,6 +571,14 @@ app.post("/chat", async (req, res) => {
       });
     }
     const finalConversationId = conversationId || "conv_" + Date.now().toString();
+
+    const languagePreference = detectLanguagePreference(message);
+    const isLanguagePreferenceIntent = Boolean(languagePreference);
+
+        if (isLanguagePreferenceIntent) {
+          conversationLanguages.set(finalConversationId, languagePreference.code);
+            }    
+
     const extracted = extractContactInfo(message);
     const hasContactInfo =
       !!extracted.extractedEmail || !!extracted.extractedPhone;
@@ -386,12 +589,15 @@ app.post("/chat", async (req, res) => {
     const keywordRelevant = isRelevantToEmpfangAI(message);
 
     const relevant =
-      keywordRelevant || hasContactInfo || isLead || wantsCallback || wantsBooking;
-
-    const shouldLogMessage = relevant;
-
-    const finalName =
-      name && name !== "Website Visitor" ? name : extracted.extractedName || "";
+    keywordRelevant ||
+    hasContactInfo ||
+    isLead ||
+    wantsCallback ||
+    wantsBooking ||
+    isLanguagePreferenceIntent;
+    
+    const shouldLogMessage = hasContactInfo || isLead || wantsCallback || wantsBooking;
+    const finalName = name && name !== "Website Visitor" ? name : extracted.extractedName || "";
     const finalEmail = email || extracted.extractedEmail || "";
     const finalPhone = phone || extracted.extractedPhone || "";
 
@@ -402,7 +608,37 @@ app.post("/chat", async (req, res) => {
     console.log("Should save as lead:", shouldLogMessage);
     console.log("Callback detected:", wantsCallback);
     console.log("Booking detected:", wantsBooking);
+    console.log("Language preference:", languagePreference);
+    console.log("Language preference intent:", isLanguagePreferenceIntent);
+    console.log("Preferred conversation language:", conversationLanguages.get(finalConversationId));
 
+    const pureLanguagePreference =
+    isLanguagePreferenceIntent &&
+    !hasContactInfo &&
+    !isLead &&
+    !wantsCallback &&
+    !wantsBooking;
+  
+    if (pureLanguagePreference) {
+      const languageReplies = {
+        de: "Gerne — ich antworte ab jetzt auf Deutsch. Wie kann ich Ihnen zu EmpfangAI helfen?",
+        en: "Sure — I can answer in English from now on. How can I help you with EmpfangAI?",
+        fr: "Bien sûr — je peux répondre en français. Comment puis-je vous aider avec EmpfangAI ?",
+        nl: "Natuurlijk — ik kan vanaf nu in het Nederlands antwoorden. Hoe kan ik u helpen met EmpfangAI?",
+        tr: "Tabii — bundan sonra Türkçe cevap verebilirim. EmpfangAI konusunda size nasıl yardımcı olabilirim?",
+      };
+  
+    return res.json({
+      conversationId: finalConversationId,
+      reply: languageReplies[languagePreference.code],
+      leadDetected: false,
+      callbackRequested: false,
+      bookingRequested: false,
+      bookingLink: null,
+      savedLead: false,
+      savedCallback: false,
+    });
+  }
     if (!relevant) {
       return res.json({
         reply:
@@ -416,11 +652,21 @@ app.post("/chat", async (req, res) => {
       });
     }
 
-    const instructions = `
+  const preferredLanguage = conversationLanguages.get(finalConversationId);
+
+const languageInstruction = preferredLanguage
+  ? `Der Nutzer bevorzugt diese Sprache: ${preferredLanguage}. Antworte immer in dieser Sprache, außer der Nutzer ändert die Sprache ausdrücklich.`
+  : `Erkenne die Sprache der letzten Nutzernachricht. Wenn sie Deutsch, Englisch, Französisch, Niederländisch oder Türkisch ist, antworte in derselben Sprache. Wenn die Sprache unklar ist, antworte auf Deutsch.`;
+
+const instructions = `
 Du bist der Website-Assistent von EmpfangAI.
 
+Sprachregeln:
+- ${languageInstruction}
+- Die offiziell unterstützten Hauptsprachen sind Deutsch, Englisch, Französisch, Niederländisch und Türkisch.
+- Wenn der Nutzer eine dieser Sprachen benutzt, antworte natürlich in dieser Sprache.
+
 Regeln:
-- Antworte immer auf Deutsch.
 - Antworte kurz: maximal 1 bis 2 Sätze.
 - Nur auf klare Nachfrage etwas ausführlicher.
 - Bleibe beim Thema EmpfangAI, Unternehmen, Demo, Kosten, Einsatzmöglichkeiten, Lead-Erfassung und Terminbuchung.
